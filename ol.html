@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Mail in Outlook öffnen</title>
+<!--
+  ol.html - Weiterleitung Jira -> Outlook (Paket 117, 25.10.2026)
+  Link:   https://trivax82.github.io/nc.html/ol.html#<EntryID>
+  Ziel:   outlook:<EntryID>  -> OUTLOOK.EXE /select (Anmeldung per Jira_4)
+  Die EntryID steht im Fragment (#). Browser senden das Fragment nicht an
+  den Server: GitHub sieht nur den Abruf von ol.html, nie die EntryID.
+  Kein Speicher, keine Cookies, keine fremden Dateien. Nur Windows-Desktop.
+-->
+<style>
+  :root { --bg:#ffffff; --fg:#1a1a1a; --muted:#666; --line:#ccc; --btn:#0f6cbd; --btnfg:#fff; --err:#c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eee; --muted:#aaa; --line:#444; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:17px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif;
+         display:flex; min-height:100vh; align-items:center; justify-content:center; }
+  main { width:100%; max-width:480px; padding:24px 16px; }
+  h1 { font-size:20px; margin:0 0 8px; }
+  .muted { color:var(--muted); font-size:14px; word-break:break-all; }
+  .center { text-align:center; }
+  a.btn, button { display:inline-block; background:var(--btn); color:var(--btnfg); border:0;
+          text-decoration:none; padding:14px 22px; border-radius:10px; font:inherit; font-weight:600; cursor:pointer; }
+  label { display:block; font-size:14px; margin:16px 0 4px; }
+  textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;
+          background:transparent; color:inherit; font:inherit; font-size:15px; min-height:80px; word-break:break-all; }
+  .err { color:var(--err); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+
+  <!-- Ansicht 1: Weiterleitung (Link mit #<EntryID>) -->
+  <section id="open" class="center" hidden>
+    <h1>Öffne die Mail in Outlook …</h1>
+    <a class="btn" id="btn" href="#">In Outlook öffnen</a>
+    <p class="muted">Falls nichts passiert: Knopf anklicken. Fragt der Browser, ob Outlook geöffnet werden darf, mit „Öffnen“ bestätigen (auf Wunsch „immer erlauben“).</p>
+    <p class="muted">Meldet Windows, dass eine App fehlt: in Outlook einmal Alt+F8 → <b>Jira_4_OutlookLinkAnmelden</b>.</p>
+  </section>
+
+  <!-- Ansicht 2: Fehler -->
+  <section id="error" class="center" hidden>
+    <h1 class="err">Keine gültige EntryID im Link</h1>
+    <p class="muted">Erwartet wird <b>…/ol.html#</b> und direkt dahinter die EntryID (nur Ziffern 0–9 und Buchstaben A–F, mindestens 40 Zeichen).</p>
+  </section>
+
+  <!-- Ansicht 3: Baukasten (Seite ohne # aufgerufen) -->
+  <section id="build" hidden>
+    <h1>Mail-Link für Jira erzeugen</h1>
+    <p class="muted">Erzeugt aus einer EntryID den Link für das Jira-Feld <b>Outlook-EntryID</b>. Ein Klick darauf öffnet die Mail in Outlook auf Windows-Rechnern, auf denen Jira_4 ausgeführt wurde.</p>
+    <label for="raw">EntryID (auch mit outlook:// davor)</label>
+    <textarea id="raw" spellcheck="false"></textarea>
+    <label for="out">Fertiger Link</label>
+    <textarea id="out" readonly></textarea>
+    <p class="center" style="margin-top:12px"><button id="copy" type="button">Link kopieren</button></p>
+    <p class="muted center" id="copied"></p>
+  </section>
+
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+
+  // Nimmt alles nach dem letzten #, entfernt Leerraum, Anfuehrungszeichen
+  // und ein fuehrendes outlook: mit beliebig vielen /. Gueltig nur bei
+  // reinen Hex-Zeichen, mindestens 40 lang (wie Jira_3 im Makro).
+  const entryId = raw => {
+    let t = String(raw || "");
+    try { t = decodeURIComponent(t); } catch (e) {}
+    if (t.includes("#")) t = t.slice(t.lastIndexOf("#") + 1);
+    t = t.replace(/[\s"']/g, "").replace(/^outlook:\/*/i, "");
+    return /^[0-9A-Fa-f]{40,}$/.test(t) ? t.toUpperCase() : "";
+  };
+
+  const frag = location.hash.slice(1);
+  if (!frag) {
+    $("build").hidden = false;
+    const update = () => {
+      const id = entryId($("raw").value);
+      $("out").value = id ? location.origin + location.pathname + "#" + id : "";
+      $("copied").textContent = ($("raw").value.trim() && !id) ? "Keine gültige EntryID." : "";
+    };
+    $("raw").addEventListener("input", update);
+    $("copy").addEventListener("click", async () => {
+      if (!$("out").value) return;
+      try { await navigator.clipboard.writeText($("out").value); }
+      catch (e) { $("out").select(); document.execCommand("copy"); }
+      $("copied").textContent = "Kopiert.";
+    });
+  } else {
+    const id = entryId(frag);
+    if (!id) {
+      $("error").hidden = false;
+    } else {
+      const target = "outlook:" + id;
+      $("open").hidden = false;
+      $("btn").href = target;
+      location.href = target;
+    }
+  }
+</script>
+</body>
+</html>

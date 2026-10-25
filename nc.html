@@ -41,16 +41,25 @@
     <p class="muted" id="hint"></p>
   </section>
 
+  <!-- Ansicht 1a: Benutzer-ID einmalig je Gerät -->
+  <section id="setup" hidden>
+    <h1>Einmalig: Ihre Benutzer-ID</h1>
+    <p class="muted">Die App braucht Ihre Nextcloud-Benutzer-ID. Sie wird nur auf diesem Gerät gespeichert und steht nicht im Link. Zu finden in der Weboberfläche unter „Dateien-Einstellungen“ → WebDAV: …/remote.php/dav/files/<b>BENUTZER-ID</b>/</p>
+    <label for="setupU">Benutzer-ID</label>
+    <input id="setupU" autocapitalize="off" autocomplete="username" spellcheck="false">
+    <div class="btns"><button id="setupOk" type="button">Speichern und öffnen</button></div>
+  </section>
+
   <!-- Ansicht 2: Fehler -->
   <section id="error" class="center" hidden>
     <h1 class="err" id="errmsg"></h1>
-    <p class="muted">Der Link braucht <b>u=</b> (Benutzer-ID) und <b>f=</b> (Nummer aus dem internen Link …/f/12345).</p>
+    <p class="muted">Der Link braucht <b>f=</b> mit der Ordner- bzw. Dateinummer (z. B. aus …/f/12345).</p>
   </section>
 
   <!-- Ansicht 3: Link-Baukasten (Seite ohne Parameter) -->
   <section id="build" hidden>
     <h1>App-Link für Nextcloud erzeugen</h1>
-    <p class="muted">Erzeugt einen normalen https-Link für Kalender, WhatsApp oder Mail. Auf dem iPhone öffnet er die Nextcloud-App, am PC die Weboberfläche – jeweils direkt beim Ordner bzw. der Datei.</p>
+    <p class="muted">Erzeugt einen normalen https-Link für Kalender, WhatsApp oder Mail. Auf dem iPhone öffnet er die Nextcloud-App, am PC die Weboberfläche – jeweils direkt beim Ordner bzw. der Datei. Die Benutzer-ID wird nur auf diesem Gerät gespeichert, nicht in den Link geschrieben.</p>
 
     <label for="u">Benutzer-ID (steht in der WebDAV-Adresse: …/remote.php/dav/files/<b>BENUTZER-ID</b>/)</label>
     <input id="u" autocapitalize="off" spellcheck="false">
@@ -73,21 +82,24 @@
              || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
   const q = new URLSearchParams(location.search);
-  const u = q.get("u"), f = q.get("f"), s = (q.get("s") || DEFAULT_SERVER).replace(/\/+$/, "");
+  const f = q.get("f"), s = (q.get("s") || DEFAULT_SERVER).replace(/\/+$/, "");
+  const ladeId = () => { try { return localStorage.getItem("nc_user") || ""; } catch (e) { return ""; } };
+  const merkeId = v => { try { localStorage.setItem("nc_user", v); } catch (e) {} };
+  // u= im Link (ältere Links) wird übernommen und für dieses Gerät gemerkt.
+  let u = q.get("u") || "";
+  if (u) merkeId(u); else u = ladeId();
 
-  if (!u && !f) {
+  if (!q.get("u") && !f) {
     // ---- Baukasten ----
     $("build").hidden = false;
-    try { $("u").value = localStorage.getItem("nc_user") || ""; } catch (e) {}
+    $("u").value = u;
     const update = () => {
       const user = $("u").value.trim();
       const m = $("raw").value.match(/\/(?:f|files\/files)\/(\d+)/);
-      try { localStorage.setItem("nc_user", user); } catch (e) {}
+      if (user) merkeId(user);
       $("buildErr").textContent = ($("raw").value.trim() && !m)
         ? "Keine Ordnernummer erkannt – die Adresse muss „/files/files/123…“ oder „/f/123…“ enthalten." : "";
-      $("out").value = (user && m)
-        ? location.origin + location.pathname + "?u=" + encodeURIComponent(user) + "&f=" + m[1]
-        : "";
+      $("out").value = m ? location.origin + location.pathname + "?f=" + m[1] : "";
     };
     $("u").addEventListener("input", update);
     $("raw").addEventListener("input", update);
@@ -97,9 +109,18 @@
       catch (e) { $("out").select(); document.execCommand("copy"); }
       $("copied").textContent = "Kopiert.";
     });
-  } else if (!u || !/^\d+$/.test(f || "")) {
+  } else if (!/^\d+$/.test(f || "")) {
     $("error").hidden = false;
-    $("errmsg").textContent = !u ? "Benutzer-ID fehlt" : "Datei-/Ordnernummer fehlt";
+    $("errmsg").textContent = "Ordner- bzw. Dateinummer fehlt";
+  } else if (isIOS && !u) {
+    // ---- Erstes Mal auf diesem Gerät: ID abfragen ----
+    $("setup").hidden = false;
+    $("setupOk").addEventListener("click", () => {
+      const v = $("setupU").value.trim();
+      if (!v) return;
+      merkeId(v);
+      location.reload();
+    });
   } else {
     // ---- Öffnen ----
     const web = s + "/index.php/f/" + f;

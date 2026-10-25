@@ -110,6 +110,18 @@
     $("webbtn").href = web;
     if (isIOS) {
       $("hint").textContent = "Falls die App nicht aufgeht: oberen Knopf antippen.";
+      // Tab nur schließen, wenn die App wirklich aufgegangen ist (Seite wurde verdeckt).
+      // Ob der Browser das Schließen erlaubt, ist unterschiedlich – sonst bleibt die Seite stehen.
+      let appOpened = false;
+      const tryClose = () => { try { window.close(); } catch (e) {} };
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) { appOpened = true; tryClose(); }
+        else if (appOpened) {
+          tryClose();
+          $("hint").textContent = "Diesen Tab können Sie schließen. Ist der Ordner nicht aufgegangen, oberen Knopf noch einmal antippen.";
+        }
+      });
+      window.addEventListener("pagehide", () => { if (appOpened) tryClose(); });
       location.href = app;
     } else {
       $("appbtn").hidden = true;

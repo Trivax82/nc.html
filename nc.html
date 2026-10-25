@@ -55,8 +55,8 @@
     <label for="u">Benutzer-ID (steht in der WebDAV-Adresse: …/remote.php/dav/files/<b>BENUTZER-ID</b>/)</label>
     <input id="u" autocapitalize="off" spellcheck="false">
 
-    <label for="raw">Interner Link des Ordners oder der Datei (Teilen → „Interner Link“ kopieren)</label>
-    <textarea id="raw" spellcheck="false" placeholder="https://hessendrive.hessen.de/f/123456"></textarea>
+    <label for="raw">Adresse aus der Browserzeile, wenn der Ordner geöffnet ist – oder „Interner Link“ aus dem Teilen-Menü</label>
+    <textarea id="raw" spellcheck="false" placeholder="https://hessendrive.hessen.de/landtag/apps/files/files/506432?dir=…"></textarea>
 
     <label for="out">Fertiger Link</label>
     <textarea id="out" readonly></textarea>
@@ -67,7 +67,7 @@
 
 </main>
 <script>
-  const DEFAULT_SERVER = "https://hessendrive.hessen.de"; // per &s=… überschreibbar
+  const DEFAULT_SERVER = "https://hessendrive.hessen.de/landtag"; // per &s=… überschreibbar
   const $ = id => document.getElementById(id);
   const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
              || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -81,10 +81,10 @@
     try { $("u").value = localStorage.getItem("nc_user") || ""; } catch (e) {}
     const update = () => {
       const user = $("u").value.trim();
-      const m = $("raw").value.match(/\/f\/(\d+)/);
+      const m = $("raw").value.match(/\/(?:f|files\/files)\/(\d+)/);
       try { localStorage.setItem("nc_user", user); } catch (e) {}
       $("buildErr").textContent = ($("raw").value.trim() && !m)
-        ? "Kein interner Link erkannt – er muss „/f/“ und eine Nummer enthalten." : "";
+        ? "Keine Ordnernummer erkannt – die Adresse muss „/files/files/123…“ oder „/f/123…“ enthalten." : "";
       $("out").value = (user && m)
         ? location.origin + location.pathname + "?u=" + encodeURIComponent(user) + "&f=" + m[1]
         : "";

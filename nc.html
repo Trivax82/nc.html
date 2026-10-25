@@ -6,8 +6,8 @@
 <meta name="robots" content="noindex">
 <title>In Nextcloud öffnen</title>
 <style>
-  :root { --bg:#ffffff; --fg:#1a1a1a; --muted:#666; --line:#ccc; --btn:#0082c9; --btnfg:#fff; --err:#c0392b; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eee; --muted:#aaa; --line:#444; } }
+  :root { --bg:#ffffff; --fg:#1a1a1a; --muted:#666; --line:#ccc; --btn:#0082c9; --btnfg:#fff; --btn2:#e8eef3; --btn2fg:#1a1a1a; --err:#c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eee; --muted:#aaa; --line:#444; --btn2:#2a2f33; --btn2fg:#eee; } }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font:17px/1.45 -apple-system, system-ui, sans-serif;
@@ -16,12 +16,14 @@
   h1 { font-size:20px; margin:0 0 8px; }
   .muted { color:var(--muted); font-size:14px; word-break:break-all; }
   .center { text-align:center; }
-  a.btn, button { display:inline-block; background:var(--btn); color:var(--btnfg); border:0;
+  .btns { display:flex; flex-direction:column; gap:10px; margin:20px 0; }
+  a.btn, button { display:block; background:var(--btn); color:var(--btnfg); border:0; text-align:center;
           text-decoration:none; padding:14px 22px; border-radius:10px; font:inherit; font-weight:600; cursor:pointer; }
+  a.btn2 { background:var(--btn2); color:var(--btn2fg); }
   label { display:block; font-size:14px; margin:16px 0 4px; }
   input, textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;
           background:transparent; color:inherit; font:inherit; font-size:16px; }
-  textarea { min-height:90px; word-break:break-all; }
+  textarea { min-height:80px; word-break:break-all; }
   .err { color:var(--err); }
   [hidden] { display:none !important; }
 </style>
@@ -29,62 +31,62 @@
 <body>
 <main>
 
-  <!-- Ansicht 1: Weiterleitung (Link mit ?p=…&u=…) -->
+  <!-- Ansicht 1: Öffnen (Link mit ?u=…&f=…) -->
   <section id="open" class="center" hidden>
     <h1>Öffne in Nextcloud …</h1>
-    <p class="muted" id="path"></p>
-    <a class="btn" id="btn" href="#">In Nextcloud öffnen</a>
-    <p class="muted">Falls nichts passiert: Knopf antippen.</p>
+    <div class="btns">
+      <a class="btn" id="appbtn" href="#">In Nextcloud-App öffnen</a>
+      <a class="btn btn2" id="webbtn" href="#">Im Browser öffnen</a>
+    </div>
+    <p class="muted" id="hint"></p>
   </section>
 
   <!-- Ansicht 2: Fehler -->
   <section id="error" class="center" hidden>
     <h1 class="err" id="errmsg"></h1>
-    <p class="muted">Der Link braucht <b>?p=</b> (Pfad) und <b>&amp;u=</b> (HessenDrive-Benutzername).</p>
+    <p class="muted">Der Link braucht <b>u=</b> (Benutzer-ID) und <b>f=</b> (Nummer aus dem internen Link …/f/12345).</p>
   </section>
 
-  <!-- Ansicht 3: Link-Baukasten (Seite ohne Parameter aufgerufen) -->
+  <!-- Ansicht 3: Link-Baukasten (Seite ohne Parameter) -->
   <section id="build" hidden>
     <h1>App-Link für Nextcloud erzeugen</h1>
-    <p class="muted">Erzeugt einen normalen https-Link, der in Kalender, WhatsApp oder Mail anklickbar ist und auf dem iPhone direkt die Nextcloud-App öffnet – nur für das Konto, dessen Benutzername eingetragen ist.</p>
+    <p class="muted">Erzeugt einen normalen https-Link für Kalender, WhatsApp oder Mail. Auf dem iPhone öffnet er die Nextcloud-App, am PC die Weboberfläche – jeweils direkt beim Ordner bzw. der Datei.</p>
 
-    <label for="u">HessenDrive-Benutzername (wie in der App unter Einstellungen)</label>
-    <input id="u" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <label for="u">Benutzer-ID (steht in der WebDAV-Adresse: …/remote.php/dav/files/<b>BENUTZER-ID</b>/)</label>
+    <input id="u" autocapitalize="off" spellcheck="false">
 
-    <label for="raw">Ordner- oder Dateipfad – Windows-Pfad aus dem Explorer oder Pfad wie in der App</label>
-    <textarea id="raw" spellcheck="false" placeholder="C:\Users\…\Nextcloud\Ordner\Unterordner"></textarea>
+    <label for="raw">Interner Link des Ordners oder der Datei (Teilen → „Interner Link“ kopieren)</label>
+    <textarea id="raw" spellcheck="false" placeholder="https://hessendrive.hessen.de/f/123456"></textarea>
 
     <label for="out">Fertiger Link</label>
     <textarea id="out" readonly></textarea>
-    <p class="center" style="margin-top:12px"><button id="copy" type="button">Link kopieren</button></p>
+    <p class="err" id="buildErr"></p>
+    <button id="copy" type="button">Link kopieren</button>
     <p class="muted center" id="copied"></p>
   </section>
 
 </main>
 <script>
-  const SERVER = "https://hessendrive.hessen.de"; // per &s=… überschreibbar
+  const DEFAULT_SERVER = "https://hessendrive.hessen.de"; // per &s=… überschreibbar
   const $ = id => document.getElementById(id);
-  const encPath = p => p.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+             || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
   const q = new URLSearchParams(location.search);
-  const p = q.get("p"), u = q.get("u"), s = q.get("s") || SERVER;
+  const u = q.get("u"), f = q.get("f"), s = (q.get("s") || DEFAULT_SERVER).replace(/\/+$/, "");
 
-  if (!p && !u) {
-    // Baukasten
+  if (!u && !f) {
+    // ---- Baukasten ----
     $("build").hidden = false;
     try { $("u").value = localStorage.getItem("nc_user") || ""; } catch (e) {}
-
-    const normalize = raw => {
-      let t = raw.trim().replace(/^["']|["']$/g, "").replace(/\\/g, "/");
-      const i = t.toLowerCase().indexOf("/nextcloud/");   // alles bis einschließlich Sync-Ordner entfernen
-      if (i !== -1) t = t.slice(i + "/nextcloud/".length);
-      return t.replace(/^\/+|\/+$/g, "");
-    };
     const update = () => {
-      const user = $("u").value.trim(), path = normalize($("raw").value);
+      const user = $("u").value.trim();
+      const m = $("raw").value.match(/\/f\/(\d+)/);
       try { localStorage.setItem("nc_user", user); } catch (e) {}
-      $("out").value = (user && path)
-        ? location.origin + location.pathname + "?u=" + encodeURIComponent(user) + "&p=" + encPath(path)
+      $("buildErr").textContent = ($("raw").value.trim() && !m)
+        ? "Kein interner Link erkannt – er muss „/f/“ und eine Nummer enthalten." : "";
+      $("out").value = (user && m)
+        ? location.origin + location.pathname + "?u=" + encodeURIComponent(user) + "&f=" + m[1]
         : "";
     };
     $("u").addEventListener("input", update);
@@ -95,19 +97,25 @@
       catch (e) { $("out").select(); document.execCommand("copy"); }
       $("copied").textContent = "Kopiert.";
     });
-  } else if (!p || !u) {
+  } else if (!u || !/^\d+$/.test(f || "")) {
     $("error").hidden = false;
-    $("errmsg").textContent = !u ? "Benutzername fehlt" : "Pfad fehlt";
+    $("errmsg").textContent = !u ? "Benutzer-ID fehlt" : "Datei-/Ordnernummer fehlt";
   } else {
-    // Weiterleitung
-    const target = "nextcloud://open-file"
-      + "?user=" + encodeURIComponent(u)
-      + "&link=" + encodeURIComponent(s)
-      + "&path=" + encPath(p);
+    // ---- Öffnen ----
+    const web = s + "/index.php/f/" + f;
+    const app = "nextcloud://open-file?user=" + encodeURIComponent(u)
+              + "&link=" + encodeURIComponent(web);
     $("open").hidden = false;
-    $("path").textContent = p;
-    $("btn").href = target;
-    location.href = target;
+    $("appbtn").href = app;
+    $("webbtn").href = web;
+    if (isIOS) {
+      $("hint").textContent = "Falls die App nicht aufgeht: oberen Knopf antippen.";
+      location.href = app;
+    } else {
+      $("appbtn").hidden = true;
+      $("hint").textContent = "Weiterleitung zur Weboberfläche …";
+      location.replace(web);
+    }
   }
 </script>
 </body>
